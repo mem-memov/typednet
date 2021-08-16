@@ -18,16 +18,25 @@ func (g *Graph) addClass() (uint, error) {
 		return 0, err
 	}
 
-	last := classes[len(classes) - 1]
+	classMark := uint(1)
 
-	next, err := g.storage.Create()
-	if err != nil {
-		return 0, err
+	current := classMark
+
+	for i := len(classes); i > 0; i-- {
+		next, err := g.storage.Create()
+		if err != nil {
+			return 0, err
+		}
+
+		err = g.storage.Connect(current, next)
+		if err != nil {
+			return 0, err
+		}
+
+		current = next
 	}
 
-	err = g.storage.Connect(last, next)
-
-	return next, nil
+	return current, nil
 }
 
 func (g *Graph) getClasses() ([]uint, error) {
@@ -47,23 +56,28 @@ func (g *Graph) getClasses() ([]uint, error) {
 
 	classes := make([]uint, 1)
 
-	next := classMark
+	neighbour := classMark
 
 	for {
-		targets, err := g.storage.ReadTargets(next)
+		neighbours, err := g.storage.ReadTargets(neighbour)
 		if err != nil {
 			return []uint{}, err
 		}
 
-		if len(targets) == 0 {
+		if len(neighbours) == 0 {
 			break
 		}
 
-		class := targets[0]
+		for _, neighbour := range neighbours {
+			neighbours, err := g.storage.ReadTargets(neighbour)
+			if err != nil {
+				return []uint{}, err
+			}
 
-		classes = append(classes, class)
-
-		next = class
+			if len(neighbours) == 0 {
+				classes = append(classes, neighbour)
+			}
+		}
 	}
 
 	return classes, nil
