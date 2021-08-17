@@ -2,7 +2,7 @@ package typednet
 
 import "fmt"
 
-type Graph struct{
+type Graph struct {
 	storage storage
 }
 
@@ -12,8 +12,8 @@ func NewGraph(storage storage) *Graph {
 	}
 }
 
-func (g *Graph) addClass() (uint, error) {
-	classes, err := g.getClasses()
+func (g *Graph) AddClass() (uint, error) {
+	classes, err := g.GetClasses()
 	if err != nil {
 		return 0, err
 	}
@@ -39,7 +39,7 @@ func (g *Graph) addClass() (uint, error) {
 	return current, nil
 }
 
-func (g *Graph) getClasses() ([]uint, error) {
+func (g *Graph) GetClasses() ([]uint, error) {
 	classMark := uint(1)
 
 	classMarkExists, err := g.storage.Has(classMark)
@@ -83,7 +83,7 @@ func (g *Graph) getClasses() ([]uint, error) {
 	return classes, nil
 }
 
-func (g *Graph) Create(class uint) (uint, error) {
+func (g *Graph) CreateInstance(class uint) (uint, error) {
 	instance, err := g.storage.Create()
 	if err != nil {
 		return 0, err
@@ -144,27 +144,41 @@ func (g *Graph) ReadIncoming(instance uint) (map[uint][]uint, error) {
 			return byClass, fmt.Errorf("incoming collection invalid at source instance %d", instance)
 		}
 
-		source, err := g.storage.ReadSources(node)
+		nodeInstance := nodeInstances[0]
+
+		nodeInstanceTargets, err := g.storage.ReadTargets(nodeInstance)
 		if err != nil {
 			return byClass, err
+		}
+
+		if len(nodeInstanceTargets) != 2 {
+			return byClass, fmt.Errorf("invalid instance target number at source instance %d", nodeInstance)
+		}
+
+		for _, nodeInstanceTarget := range nodeInstanceTargets {
+			if nodeInstanceTarget == node {
+				continue
+			}
+			nodeClass := nodeInstanceTarget
+			byClass[nodeClass] = append(byClass[nodeClass], nodeInstance)
 		}
 	}
 
 	return byClass, nil
 }
 
-func (g *Graph) ReadOutgoing(instance uint) (map[uint][]uint, error) {
-
-}
-
-func (g *Graph) Connect(source uint, target uint) error {
-
-}
-
-func (g *Graph) Disconnect(source uint, target uint) error {
-
-}
-
-func (g *Graph) Delete(source uint) error {
-
-}
+//func (g *Graph) ReadOutgoing(instance uint) (map[uint][]uint, error) {
+//
+//}
+//
+//func (g *Graph) Connect(source uint, target uint) error {
+//
+//}
+//
+//func (g *Graph) Disconnect(source uint, target uint) error {
+//
+//}
+//
+//func (g *Graph) Delete(source uint) error {
+//
+//}
