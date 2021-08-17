@@ -21,8 +21,9 @@ func (g *Graph) AddClass() (uint, error) {
 	classMark := uint(1)
 
 	current := classMark
+	hops := len(classes) + 1
 
-	for i := len(classes); i > 0; i-- {
+	for i := hops; i > 0; i-- {
 		next, err := g.storage.Create()
 		if err != nil {
 			return 0, err
@@ -52,69 +53,81 @@ func (g *Graph) GetClasses() ([]uint, error) {
 		if err != nil {
 			return []uint{}, err
 		}
+		if classMark != uint(1) {
+			return []uint{}, fmt.Errorf("Class mark not 1")
+		}
 	}
 
-	classes := make([]uint, 1)
+	getLastInChain := func(neighbour uint) (uint, error) {
+		for {
+			neighbours, err := g.storage.ReadTargets(neighbour)
+			if err != nil {
+				return 0, err
+			}
+			if len(neighbours) > 1 {
+				return 0, fmt.Errorf("too many targets at Class chaine source %d", neighbour)
+			}
 
-	neighbour := classMark
+			if len(neighbours) == 0 {
+				return neighbour, nil
+			}
 
-	for {
-		neighbours, err := g.storage.ReadTargets(neighbour)
+			neighbour = neighbours[0]
+		}
+	}
+
+	chains, err := g.storage.ReadTargets(classMark)
+	if err != nil {
+		return []uint{}, err
+	}
+
+	classes := make([]uint, 0)
+
+	for _, chain := range chains {
+
+		last, err := getLastInChain(chain)
 		if err != nil {
 			return []uint{}, err
 		}
 
-		if len(neighbours) == 0 {
-			break
-		}
-
-		for _, neighbour := range neighbours {
-			neighbours, err := g.storage.ReadTargets(neighbour)
-			if err != nil {
-				return []uint{}, err
-			}
-
-			if len(neighbours) == 0 {
-				classes = append(classes, neighbour)
-			}
-		}
+		classes = append(classes, last)
 	}
 
 	return classes, nil
 }
 
-func (g *Graph) CreateInstance(class uint) (uint, error) {
-	instance, err := g.storage.Create()
+func (g *Graph) CreateInstance(class Class) (Instance, error) {
+	root, err := g.storage.Create()
 	if err != nil {
-		return 0, err
+		return Instance{}, err
 	}
 
 	incoming, err := g.storage.Create()
 	if err != nil {
-		return 0, err
+		return Instance{}, err
 	}
 
 	outgoing, err := g.storage.Create()
 	if err != nil {
-		return 0, err
+		return Instance{}, err
 	}
 
-	err = g.storage.Connect(instance, class)
+	err = g.storage.Connect(root, class.toInteger())
 	if err != nil {
-		return 0, err
+		return Instance{}, err
 	}
 
-	err = g.storage.Connect(incoming, instance)
+	err = g.storage.Connect(incoming, root)
 	if err != nil {
-		return 0, err
+		return Instance{}, err
 	}
 
-	err = g.storage.Connect(instance, outgoing)
+	err = g.storage.Connect(root, outgoing)
 	if err != nil {
-		return 0, err
+		return Instance{}, err
 	}
 
-	return instance, nil
+	return newInstance(root, class, incoming, outgoing), nil
 }
 
 func (g *Graph) ReadIncoming(instance uint) (map[uint][]uint, error) {
@@ -126,7 +139,7 @@ func (g *Graph) ReadIncoming(instance uint) (map[uint][]uint, error) {
 	}
 
 	if len(incoming) != 1 {
-		return byClass, fmt.Errorf("incoming collection invalid at target instance %d", instance)
+		return byClass, fmt.Errorf("incoming collection invalid at target Instance %d", instance)
 	}
 
 	nodes, err := g.storage.ReadSources(incoming[0])
@@ -141,7 +154,7 @@ func (g *Graph) ReadIncoming(instance uint) (map[uint][]uint, error) {
 		}
 
 		if len(nodeInstances) != 1 {
-			return byClass, fmt.Errorf("incoming collection invalid at source instance %d", instance)
+			return byClass, fmt.Errorf("incoming collection invalid at source Instance %d", instance)
 		}
 
 		nodeInstance := nodeInstances[0]
@@ -152,7 +165,7 @@ func (g *Graph) ReadIncoming(instance uint) (map[uint][]uint, error) {
 		}
 
 		if len(nodeInstanceTargets) != 2 {
-			return byClass, fmt.Errorf("invalid instance target number at source instance %d", nodeInstance)
+			return byClass, fmt.Errorf("invalid Instance target number at source Instance %d", nodeInstance)
 		}
 
 		for _, nodeInstanceTarget := range nodeInstanceTargets {
@@ -167,7 +180,7 @@ func (g *Graph) ReadIncoming(instance uint) (map[uint][]uint, error) {
 	return byClass, nil
 }
 
-//func (g *Graph) ReadOutgoing(instance uint) (map[uint][]uint, error) {
+//func (g *Graph) ReadOutgoing(Instance uint) (map[uint][]uint, error) {
 //
 //}
 //
