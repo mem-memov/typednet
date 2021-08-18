@@ -4,96 +4,73 @@ import "fmt"
 
 type Graph struct {
 	storage storage
+	classMark uint
 }
 
 func NewGraph(storage storage) *Graph {
 	return &Graph{
 		storage: storage,
+		classMark: uint(1),
 	}
 }
 
-func (g *Graph) AddClass() (uint, error) {
-	classes, err := g.GetClasses()
+func (g *Graph) AddClass() (Class, error) {
+	classMarkExists, err := g.storage.Has(g.classMark)
 	if err != nil {
 		return 0, err
 	}
 
-	classMark := uint(1)
-
-	current := classMark
-	hops := len(classes) + 1
-
-	for i := hops; i > 0; i-- {
-		next, err := g.storage.Create()
+	if !classMarkExists {
+		node, err := g.storage.Create()
 		if err != nil {
 			return 0, err
 		}
-
-		err = g.storage.Connect(current, next)
-		if err != nil {
-			return 0, err
+		if node != uint(g.classMark) {
+			return 0, fmt.Errorf("Class mark not 1")
 		}
-
-		current = next
 	}
 
-	return current, nil
+	node, err := g.storage.Create()
+	if err != nil {
+		return 0, err
+	}
+
+	err = g.storage.Connect(node, g.classMark)
+	if err != nil {
+		return 0, err
+	}
+
+	return newClass(node), nil
 }
 
-func (g *Graph) GetClasses() ([]uint, error) {
-	classMark := uint(1)
+func (g *Graph) GetClasses() ([]Class, error) {
 
-	classMarkExists, err := g.storage.Has(classMark)
+	classMarkExists, err := g.storage.Has(g.classMark)
 	if err != nil {
-		return []uint{}, err
+		return []Class{}, err
 	}
 
 	if !classMarkExists {
-		_, err = g.storage.Create()
-		if err != nil {
-			return []uint{}, err
-		}
-		if classMark != uint(1) {
-			return []uint{}, fmt.Errorf("Class mark not 1")
-		}
+		return []Class{}, nil
 	}
 
-	getLastInChain := func(neighbour uint) (uint, error) {
-		for {
-			neighbours, err := g.storage.ReadTargets(neighbour)
-			if err != nil {
-				return 0, err
-			}
-			if len(neighbours) > 1 {
-				return 0, fmt.Errorf("too many targets at Class chaine source %d", neighbour)
-			}
-
-			if len(neighbours) == 0 {
-				return neighbour, nil
-			}
-
-			neighbour = neighbours[0]
-		}
-	}
-
-	chains, err := g.storage.ReadTargets(classMark)
+	sources, err := g.storage.ReadSources(g.classMark)
 	if err != nil {
-		return []uint{}, err
+		return []Class{}, err
 	}
 
-	classes := make([]uint, 0)
+	classes := make([]Class, 0)
 
-	for _, chain := range chains {
-
-		last, err := getLastInChain(chain)
-		if err != nil {
-			return []uint{}, err
-		}
-
-		classes = append(classes, last)
+	for _, source := range sources {
+		classes = append(classes, newClass(source))
 	}
 
 	return classes, nil
+}
+
+func (g *Graph) GetClassInstances(class Class) ([]Instance, error) {
+
+
 }
 
 func (g *Graph) CreateInstance(class Class) (Instance, error) {
@@ -130,8 +107,8 @@ func (g *Graph) CreateInstance(class Class) (Instance, error) {
 	return newInstance(root, class, incoming, outgoing), nil
 }
 
-func (g *Graph) ReadIncoming(instance uint) (map[uint][]uint, error) {
-	byClass := make(map[uint][]uint)
+func (g *Graph) ReadIncoming(instance Instance) (map[Class][]Instance, error) {
+	byClass := make(map[Class][]Instance)
 
 	incoming, err := g.storage.ReadSources(instance)
 	if err != nil {
@@ -172,8 +149,8 @@ func (g *Graph) ReadIncoming(instance uint) (map[uint][]uint, error) {
 			if nodeInstanceTarget == node {
 				continue
 			}
-			nodeClass := nodeInstanceTarget
-			byClass[nodeClass] = append(byClass[nodeClass], nodeInstance)
+			nodeClass := newClass(nodeInstanceTarget)
+			byClass[nodeClass] = append(byClass[nodeClass], newInstance(nodeInstance, nodeClass, ))
 		}
 	}
 

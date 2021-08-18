@@ -16,6 +16,10 @@ func newInstance(root uint, class Class, incoming uint, outgoing uint) Instance 
 	}
 }
 
+func (i Instance) Connect(another Instance) error {
+
+}
+
 //func (i Instance) getIncoming() ([]Instance, error) {
 //
 //}
